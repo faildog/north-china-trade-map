@@ -4,9 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light">
-  <link rel="stylesheet" href="leaflet.css?v=20261026">
-  <link rel="stylesheet" href="MarkerCluster.css?v=20261026">
-  <link rel="stylesheet" href="MarkerCluster.Default.css?v=20261026">
+  <link rel="stylesheet" href="assets/leaflet.css?v=20261023u">
+  <link rel="stylesheet" href="assets/MarkerCluster.css?v=20261023u">
+  <link rel="stylesheet" href="assets/MarkerCluster.Default.css?v=20261023u">
   <script>window.addEventListener("error",e=>{document.documentElement.dataset.mapError=(e.message||"error")+" @"+(e.filename||"")+":"+(e.lineno||"")});window.addEventListener("unhandledrejection",e=>{document.documentElement.dataset.mapError=String(e.reason||"unhandled rejection")});</script>
   <title>华北外贸客户地图</title>
   <style>
@@ -221,31 +221,65 @@
       .map-toolbox { align-items:flex-start; }
       .legend { justify-content:flex-start; }
     }
+
+    .mode-row { padding-top: 2px; }
+    .mode-row .region-btn[data-mode="内贸"] { border-color:#c9f0e2; background:#f1fcf8; color:#087b58; }
+    .mode-row .region-btn[data-mode="外贸"] { border-color:#cfe0ff; background:#f2f6ff; color:#1d4ed8; }
+    .mode-row .region-btn[data-mode="内外贸"] { border-color:#fde7bb; background:#fffaf0; color:#9a5b00; }
+    .mode-row .region-btn.active[data-mode="全部"] { background:var(--ink); }
+    .mode-row .region-btn.active[data-mode="内贸"] { background:#087b58; border-color:#087b58; color:#fff; }
+    .mode-row .region-btn.active[data-mode="外贸"] { background:#1d4ed8; border-color:#1d4ed8; color:#fff; }
+    .mode-row .region-btn.active[data-mode="内外贸"] { background:#b45309; border-color:#b45309; color:#fff; }
+    .filter-grid { grid-template-columns: 1fr 1.2fr 1fr .9fr .9fr .9fr auto auto; }
+    .badge.mode-domestic { background:#e9fbf4; color:#087b58; border-color:#c9f0e2; }
+    .badge.mode-foreign { background:#edf4ff; color:#1d4ed8; border-color:#d7e5ff; }
+    .badge.mode-both { background:#fff6e5; color:#9a5b00; border-color:#fde7bb; }
+    .cache-pill.ok { background:#e9fbf4; color:#087b58; border-color:#c9f0e2; }
+    .data-dialog { width:min(940px,calc(100vw - 28px)); }
+    .data-dialog .edit-dialog-body { grid-template-columns: 1.15fr .85fr; max-height:calc(100vh - 180px); }
+    .data-card { border:1px solid var(--line); border-radius:14px; padding:15px; background:#fbfdff; }
+    .data-card h3 { margin:0 0 5px; font-size:15px; }
+    .data-card p { margin:0 0 12px; color:var(--muted); font-size:12px; }
+    .data-actions { display:flex; gap:8px; flex-wrap:wrap; }
+    .drop-zone { margin-top:12px; border:1.5px dashed #adc2de; background:#f5f9ff; border-radius:12px; padding:20px 14px; text-align:center; color:#3b5575; transition:.15s; }
+    .drop-zone.dragover { border-color:var(--blue); background:#eef5ff; box-shadow:0 0 0 3px rgba(37,99,235,.08); }
+    .import-preview { margin-top:12px; min-height:56px; max-height:260px; overflow:auto; border:1px solid var(--line); border-radius:11px; background:#fff; padding:10px; font-size:12px; }
+    .import-preview table { width:100%; border-collapse:collapse; }
+    .import-preview th,.import-preview td { border-bottom:1px solid #edf1f7; padding:5px 6px; text-align:left; white-space:nowrap; }
+    .import-preview .ok { color:#087b58; } .import-preview .err { color:#b42318; }
+    .cache-list { display:grid; gap:8px; margin:12px 0; }
+    .cache-item { display:flex; justify-content:space-between; gap:12px; padding:8px 10px; border:1px solid var(--line); border-radius:9px; background:#fff; }
+    .cache-item strong { font-size:13px; } .cache-item span { color:var(--muted); font-size:12px; }
+    .tool-hint { font-size:11px; color:var(--muted); line-height:1.55; }
+    .result-mode { display:flex; gap:5px; flex-wrap:wrap; margin:5px 0 2px; }
+    .result-mode .badge { padding:2px 7px; font-size:10px; }
+    @media (max-width: 720px) { .data-dialog .edit-dialog-body { grid-template-columns:1fr; } }
   </style>
 </head>
 <body>
   <main class="app" id="app">
     <header class="hero">
       <div>
-        <div class="eyebrow">NORTH CHINA TRADE MAP</div>
-        <h1>华北外贸客户地图</h1>
-        <p class="lead">按区域、城市和企业类型联动筛选。已匹配到高德公开POI的企业/地址显示精确点位并保留POI编号；其余点位明确标为区县或城市近似，不把行政中心冒充厂房地址。</p>
+        <div class="eyebrow">NORTH CHINA CUSTOMER INTELLIGENCE</div>
+        <h1>华北客户地图 · 内贸 / 外贸</h1>
+        <p class="lead">把外贸客户线索与内贸走访工厂放在同一张地图上。可按业务模式、区域、城市和企业类型联动筛选；内贸记录由 2026-11-11 走访表归并，重复走访合并为一家企业并保留走访次数。</p>
       </div>
       <div class="hero-actions">
-        <span class="pill" id="cityCountPill">32 城市</span>
-        <span class="pill" id="recordCountPill">2,117 条记录</span>
-        <span class="pill warn">POI与行政区分级标注</span>
-        <span class="pill">在线浏览版</span>
+        <span class="pill" id="cityCountPill">0 城市</span>
+        <span class="pill" id="recordCountPill">0 条记录</span>
+        <span class="pill ok cache-pill" id="cachePill">本机缓存已启用</span>
+        <button class="btn primary" id="newCompanyBtn" type="button">新增企业</button>
+        <button class="btn" id="openDataBtn" type="button">导入与数据工具</button>
       </div>
     </header>
 
     <section class="kpis" aria-label="当前筛选统计">
       <article class="kpi"><div class="kpi-label">当前记录</div><div class="kpi-value" id="kpiTotal">0</div></article>
+      <article class="kpi"><div class="kpi-label">外贸</div><div class="kpi-value" id="kpiForeign">0</div></article>
+      <article class="kpi"><div class="kpi-label">内贸走访</div><div class="kpi-value" id="kpiDomestic">0</div></article>
+      <article class="kpi"><div class="kpi-label">内外贸兼有</div><div class="kpi-value" id="kpiBoth">0</div></article>
       <article class="kpi"><div class="kpi-label">工厂/制造</div><div class="kpi-value" id="kpiFactory">0</div></article>
-      <article class="kpi"><div class="kpi-label">外贸公司</div><div class="kpi-value" id="kpiTrader">0</div></article>
       <article class="kpi"><div class="kpi-label">货代/物流</div><div class="kpi-value" id="kpiLogistics">0</div></article>
-      <article class="kpi"><div class="kpi-label">有公开流向证据</div><div class="kpi-value" id="kpiFlow">0</div></article>
-      <article class="kpi"><div class="kpi-label">地址已校准</div><div class="kpi-value" id="kpiAddress">0</div></article>
     </section>
 
     <section class="controls" aria-label="地图筛选器">
@@ -257,9 +291,16 @@
         <button class="region-btn" type="button" data-region="内蒙古">内蒙古</button>
         <button class="region-btn" type="button" data-region="山东">山东</button>
       </div>
+      <div class="region-row mode-row" id="modeRow">
+        <strong>业务模式</strong>
+        <button class="region-btn active" type="button" data-mode="全部">全部</button>
+        <button class="region-btn" type="button" data-mode="内贸">内贸走访</button>
+        <button class="region-btn" type="button" data-mode="外贸">外贸线索</button>
+        <button class="region-btn" type="button" data-mode="内外贸">内外贸兼有</button>
+      </div>
       <div class="filter-grid">
         <div class="field"><label for="cityFilter">城市</label><select class="select" id="cityFilter"></select></div>
-        <div class="field"><label for="searchInput">企业/产品/流向搜索</label><input class="input" id="searchInput" type="search" placeholder="例如：轮胎、化工、俄罗斯、天津港"></div>
+        <div class="field"><label for="searchInput">企业/产品/流向搜索</label><input class="input" id="searchInput" type="search" placeholder="企业、地址、货类、流向、走访结果"></div>
         <div class="field"><label for="categoryFilter">客户分类</label><select class="select" id="categoryFilter"><option value="全部">全部分类</option><option>工厂/制造</option><option>外贸公司</option><option>货代/物流</option><option>外贸服务/平台</option></select></div>
         <div class="field"><label for="statusFilter">核验状态</label><select class="select" id="statusFilter"><option value="全部">全部状态</option><option>已核验</option><option>部分核验</option><option>待核验</option></select></div>
         <div class="field"><label for="confidenceFilter">可信度</label><select class="select" id="confidenceFilter"><option value="全部">全部等级</option><option>A</option><option>B</option><option>C</option></select></div>
@@ -327,8 +368,8 @@
     </section>
 
     <footer class="footer">
-      <span>数据更新：2026-10-23 · 底图：高德地图 · 行政区参考：DataV GeoAtlas</span>
-      <span>地图用于客户线索筛选，不替代企业精确地址或海关逐票记录。</span>
+      <span>数据更新：2026-11-11 · 内贸走访 1,202 条有效记录归并为 900 家 · 底图：高德地图</span>
+      <span>内贸点位按同城/同区县现有企业点位近似，公开看板不展示内部联系人及电话。</span>
     </footer>
   </main>
 
@@ -338,6 +379,10 @@
       <input type="hidden" id="editCompanyId">
       <div><label for="editName">企业名称</label><input id="editName" type="text"></div>
       <div><label for="editCategory">客户分类</label><select id="editCategory"><option>工厂/制造</option><option>外贸公司</option><option>货代/物流</option><option>外贸服务/平台</option></select></div>
+      <div><label for="editTradeMode">业务模式</label><select id="editTradeMode"><option>外贸</option><option>内贸</option><option>内外贸</option></select></div>
+      <div><label for="editVisitCount">走访次数</label><input id="editVisitCount" type="number" min="0" step="1"></div>
+      <div><label for="editLatestVisitDate">最近走访日期</label><input id="editLatestVisitDate" type="date"></div>
+      <div><label for="editVisitResult">最近走访结果</label><input id="editVisitResult" type="text" placeholder="装 / 卸 / 装卸 / 异常 / 准确"></div>
       <div><label for="editCity">城市</label><input id="editCity" type="text"></div>
       <div><label for="editDistrict">区县/园区</label><input id="editDistrict" type="text"></div>
       <div class="wide"><label for="editAddress">详细地址</label><textarea id="editAddress" placeholder="填写官网、地图或企业公开资料中确认的详细地址"></textarea></div>
@@ -346,6 +391,14 @@
       <div><label for="editWebsite">官网</label><input id="editWebsite" type="url" placeholder="https://"></div>
       <div class="wide"><label for="editProduct">主营产品/服务</label><input id="editProduct" type="text"></div>
       <div class="wide"><label for="editExportClue">外贸线索</label><textarea id="editExportClue"></textarea></div>
+      <div><label for="editLogisticsMode">物流模式</label><input id="editLogisticsMode" type="text" placeholder="集装箱 / 散车 / 多式联运"></div>
+      <div><label for="editContainerTypes">常用箱型</label><input id="editContainerTypes" type="text" placeholder="20GP / 40HC"></div>
+      <div><label for="editMainDestination">主要发运流向</label><input id="editMainDestination" type="text" placeholder="广州 / 福建 / 华南"></div>
+      <div><label for="editShippingLines">船公司</label><input id="editShippingLines" type="text" placeholder="信风 / 安通 / 中谷 / 中远"></div>
+      <div><label for="editTruckingCompanies">车队</label><input id="editTruckingCompanies" type="text"></div>
+      <div><label for="editCargoType">货类</label><input id="editCargoType" type="text" placeholder="瓷砖 / 钢管 / 煤炭"></div>
+      <div><label for="editCapacity">产能</label><input id="editCapacity" type="text" placeholder="如 30-40柜/月"></div>
+      <div class="wide"><label for="editFactoryInfo">走访情况 / 工厂情况</label><textarea id="editFactoryInfo"></textarea></div>
       <div><label for="editStatus">核验状态</label><select id="editStatus"><option>已核验</option><option>部分核验</option><option>待核验</option></select></div>
       <div><label for="editConfidence">可信度</label><select id="editConfidence"><option>A</option><option>B</option><option>C</option></select></div>
       <div><label for="editPriority">客户优先级</label><select id="editPriority"><option>高</option><option>中</option><option>低</option></select></div>
@@ -366,10 +419,47 @@
     </div>
     <div class="edit-dialog-foot"><span class="notice" id="editNotice"></span><button class="btn" id="exportEditsBtn" type="button">导出修改补丁</button><button class="btn" id="cancelEditBtn" type="button">取消</button><button class="btn primary" id="saveEditBtn" type="button">保存修改</button></div>
   </dialog>
+  <dialog class="edit-dialog data-dialog" id="dataDialog">
+    <div class="edit-dialog-head"><h2>导入与数据工具</h2><button class="btn" id="closeDataBtn" type="button">关闭</button></div>
+    <div class="edit-dialog-body">
+      <section class="data-card">
+        <h3>按模板新增 / 批量导入</h3>
+        <p>支持 Excel（.xlsx/.xls）和 CSV。系统会按“企业名称 + 城市 + 地址”检查重复；经纬度为空时按城市/区县近似落点，之后可在详情中地图点选校准。</p>
+        <div class="data-actions">
+          <a class="btn primary" href="templates/华北客户新增导入模板_2026-11-11.xlsx" download>下载 Excel 模板</a>
+          <button class="btn" id="pickImportBtn" type="button">选择文件</button>
+          <input class="sr-only" id="importFile" type="file" accept=".xlsx,.xls,.csv">
+        </div>
+        <div class="drop-zone" id="dropZone">把模板文件拖到这里，或点击“选择文件”</div>
+        <div class="import-preview" id="importPreview">尚未选择文件。</div>
+        <div class="data-actions" style="margin-top:10px">
+          <button class="btn primary" id="confirmImportBtn" type="button" disabled>确认导入到本机</button>
+          <span class="tool-hint" id="importStatus"></span>
+        </div>
+      </section>
+      <section class="data-card">
+        <h3>本机缓存</h3>
+        <p>公共看板是静态页面，修改和新增数据只会保存在当前浏览器。清理浏览器数据前请先导出完整数据。</p>
+        <div class="cache-list">
+          <div class="cache-item"><span>已修改记录</span><strong id="cacheEditCount">0</strong></div>
+          <div class="cache-item"><span>本机新增记录</span><strong id="cacheImportCount">0</strong></div>
+          <div class="cache-item"><span>缓存时间</span><strong id="cacheUpdatedAt">—</strong></div>
+        </div>
+        <div class="data-actions">
+          <button class="btn" id="exportDataBtn" type="button">导出完整数据 XLSX</button>
+          <button class="btn" id="clearCacheBtn" type="button">清空本机修改</button>
+        </div>
+        <p class="tool-hint" style="margin-top:12px">建议：每月把导出的 XLSX 归档，并交给管理员合并进公共数据版本。</p>
+      </section>
+    </div>
+  </dialog>
   <div class="pick-map-hint" id="pickMapHint">请在地图上点击企业准确位置，点击后返回编辑窗口</div>
 
-  <script src="leaflet.js?v=20261026"></script>
-  <script src="leaflet.markercluster.js?v=20261026"></script>
-  <script src="start.js?v=20261026"></script>
+  <script src="assets/xlsx.full.min.js?v=20261111a"></script>
+  <script src="assets/leaflet.js?v=20261111a"></script>
+  <script src="assets/leaflet.markercluster.js?v=20261111a"></script>
+  <script src="assets/north-china-map.js?v=20261111a"></script>
+  <script src="data/map_companies.js?v=20261111a"></script>
+  <script src="assets/app.js?v=20261111a"></script>
 </body>
 </html>
