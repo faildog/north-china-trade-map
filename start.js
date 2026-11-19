@@ -9,10 +9,10 @@
   (async () => {
     try {
       let b64 = '';
-      for (let i = 1; i <= 3; i++) b64 += await get('./remote_data_' + i + '.txt?v=20261111c');
+      for (let i = 1; i <= 3; i++) b64 += await get('./remote_data_' + i + '.txt?v=20261119a');
       (0, eval)(await unzip(b64));
       const s = document.createElement('script');
-      s.src = './assets/app.js?v=20261111c';
+      s.src = './assets/app.js?v=20261119a';
       s.onerror = () => document.documentElement.dataset.mapError = 'app.js load failed';
       document.body.appendChild(s);
     } catch (e) {

@@ -3,13 +3,17 @@
   const LOCAL_EDITS_KEY = 'northChinaTradeMapEditsV2';
   const LOCAL_IMPORTS_KEY = 'northChinaTradeMapImportsV2';
   const LOCAL_UPDATED_KEY = 'northChinaTradeMapUpdatedV2';
+  const LOCAL_DELETIONS_KEY = 'northChinaTradeMapDeletionsV2';
   function readStore(key, fallback) { try { const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : fallback; } catch (_) { return fallback; } }
   let pendingEdits = readStore(LOCAL_EDITS_KEY, {});
   let localImports = readStore(LOCAL_IMPORTS_KEY, []);
+  const storedDeletions = readStore(LOCAL_DELETIONS_KEY, []);
+  let localDeletions = new Set(Array.isArray(storedDeletions) ? storedDeletions.map(String) : []);
   if (!pendingEdits || typeof pendingEdits !== 'object' || Array.isArray(pendingEdits)) pendingEdits = {};
   if (!Array.isArray(localImports)) localImports = [];
-  const COMPANIES = [...BASE_COMPANIES, ...localImports];
+  const COMPANIES = [...BASE_COMPANIES, ...localImports].filter(x => !localDeletions.has(String(x.id)));
   const CITY_META = window.NORTH_CHINA_CITY_META || (window.NORTH_CHINA_CITY_META = {});
+  const BASE_CITY_NAMES = new Set(Object.keys(CITY_META));
   const GEOJSON = window.NORTH_CHINA_GEOJSON;
   const CATEGORY_COLORS = { '工厂/制造': '#2563eb', '外贸公司': '#059669', '货代/物流': '#d97706', '外贸服务/平台': '#7c3aed' };
   const PAGE_SIZE = 40;
@@ -18,14 +22,14 @@
     city: document.getElementById('cityFilter'), search: document.getElementById('searchInput'), category: document.getElementById('categoryFilter'), status: document.getElementById('statusFilter'), confidence: document.getElementById('confidenceFilter'), addressStatus: document.getElementById('addressStatusFilter'), flowOnly: document.getElementById('flowOnly'), reset: document.getElementById('resetBtn'), regionRow: document.getElementById('regionRow'), modeRow: document.getElementById('modeRow'), legend: document.getElementById('legend'), results: document.getElementById('results'), resultCount: document.getElementById('resultCount'), pager: document.getElementById('pager'), prev: document.getElementById('prevPage'), next: document.getElementById('nextPage'), pageInfo: document.getElementById('pageInfo'), detailTitle: document.getElementById('detailTitle'), detailTags: document.getElementById('detailTags'), detailBody: document.getElementById('detailBody'), mapContext: document.getElementById('mapContext'), mapFootnote: document.getElementById('mapFootnote'), cityCountPill: document.getElementById('cityCountPill'), recordCountPill: document.getElementById('recordCountPill'), baseSwitch: document.getElementById('baseSwitch'), fitMapBtn: document.getElementById('fitMapBtn'), fullscreenBtn: document.getElementById('fullscreenBtn'), kpiTotal: document.getElementById('kpiTotal'), kpiForeign: document.getElementById('kpiForeign'), kpiDomestic: document.getElementById('kpiDomestic'), kpiBoth: document.getElementById('kpiBoth'), kpiFactory: document.getElementById('kpiFactory'), kpiLogistics: document.getElementById('kpiLogistics')
   };
   Object.assign(els, {
-    editCompanyBtn: document.getElementById('editCompanyBtn'), editDialog: document.getElementById('editDialog'), editNotice: document.getElementById('editNotice'), saveEditBtn: document.getElementById('saveEditBtn'), cancelEditBtn: document.getElementById('cancelEditBtn'), closeEditBtn: document.getElementById('closeEditBtn'), exportEditsBtn: document.getElementById('exportEditsBtn'), pickMapBtn: document.getElementById('pickMapBtn'), pickMapHint: document.getElementById('pickMapHint'), newCompanyBtn: document.getElementById('newCompanyBtn'), openDataBtn: document.getElementById('openDataBtn'), dataDialog: document.getElementById('dataDialog'), closeDataBtn: document.getElementById('closeDataBtn'), pickImportBtn: document.getElementById('pickImportBtn'), importFile: document.getElementById('importFile'), dropZone: document.getElementById('dropZone'), importPreview: document.getElementById('importPreview'), importStatus: document.getElementById('importStatus'), confirmImportBtn: document.getElementById('confirmImportBtn'), exportDataBtn: document.getElementById('exportDataBtn'), clearCacheBtn: document.getElementById('clearCacheBtn'), cachePill: document.getElementById('cachePill'), cacheEditCount: document.getElementById('cacheEditCount'), cacheImportCount: document.getElementById('cacheImportCount'), cacheUpdatedAt: document.getElementById('cacheUpdatedAt')
+    editCompanyBtn: document.getElementById('editCompanyBtn'), editDialog: document.getElementById('editDialog'), editNotice: document.getElementById('editNotice'), saveEditBtn: document.getElementById('saveEditBtn'), cancelEditBtn: document.getElementById('cancelEditBtn'), closeEditBtn: document.getElementById('closeEditBtn'), exportEditsBtn: document.getElementById('exportEditsBtn'), pickMapBtn: document.getElementById('pickMapBtn'), pickMapHint: document.getElementById('pickMapHint'), newCompanyBtn: document.getElementById('newCompanyBtn'), openDataBtn: document.getElementById('openDataBtn'), dataDialog: document.getElementById('dataDialog'), closeDataBtn: document.getElementById('closeDataBtn'), pickImportBtn: document.getElementById('pickImportBtn'), importFile: document.getElementById('importFile'), dropZone: document.getElementById('dropZone'), importPreview: document.getElementById('importPreview'), importStatus: document.getElementById('importStatus'), confirmImportBtn: document.getElementById('confirmImportBtn'), exportDataBtn: document.getElementById('exportDataBtn'), clearCacheBtn: document.getElementById('clearCacheBtn'), cachePill: document.getElementById('cachePill'), cacheEditCount: document.getElementById('cacheEditCount'), cacheImportCount: document.getElementById('cacheImportCount'), cacheDeleteCount: document.getElementById('cacheDeleteCount'), cacheUpdatedAt: document.getElementById('cacheUpdatedAt'), deleteCompanyBtn: document.getElementById('deleteCompanyBtn')
   });
   const EDIT_FIELDS = {
     name:'editName', category:'editCategory', tradeMode:'editTradeMode', city:'editCity', district:'editDistrict', address:'editAddress', phone:'editPhone', website:'editWebsite', product:'editProduct', exportClue:'editExportClue', status:'editStatus', confidence:'editConfidence', priority:'editPriority', addressStatus:'editAddressStatus', coordinateAccuracy:'editCoordinateAccuracy', coordinateSource:'editCoordinateSource', lat:'editLat', lng:'editLng', mapAddress:'editMapAddress', amapPoiId:'editAmapPoiId', geocodeMatch:'editGeocodeMatch', geocodeSourceUrl:'editGeocodeSourceUrl', sourceName:'editSourceName', sourceUrl:'editSourceUrl', flow:'editFlow', flowEvidence:'editFlowEvidence', flowSourceName:'editFlowSourceName', flowSourceUrl:'editFlowSourceUrl', note:'editNote', visitCount:'editVisitCount', latestVisitDate:'editLatestVisitDate', visitResult:'editVisitResult', logisticsMode:'editLogisticsMode', containerTypes:'editContainerTypes', mainDestination:'editMainDestination', shippingLines:'editShippingLines', truckingCompanies:'editTruckingCompanies', cargoType:'editCargoType', capacity:'editCapacity', factoryInfo:'editFactoryInfo'
   };
   let editingId = null, editingOriginal = null, pickingLocation = false, pendingImportRows = [];
   const nf = new Intl.NumberFormat('zh-CN');
-  let currentItems = [], cityBounds = {}, map = null, markerCluster = null, selectedLayer = null, boundaryLayer = null, tileLayer = null, clusterRegistry = new Map(), clusterSeq = 0, fitOnRender = false, activeBase = 'street';
+  let currentItems = [], cityBounds = {}, map = null, markerCluster = null, selectedLayer = null, boundaryLayer = null, dynamicCoverageLayer = null, tileLayer = null, clusterRegistry = new Map(), clusterSeq = 0, fitOnRender = false, activeBase = 'street';
   function tradeModesOf(r) { const modes = Array.isArray(r?.tradeModes) ? r.tradeModes.filter(Boolean) : []; return modes.length ? [...new Set(modes)] : [r?.tradeMode || '外贸']; }
   function modeLabel(r) { const modes = tradeModesOf(r); return modes.includes('内贸') && modes.includes('外贸') ? '内外贸' : (modes.includes('内贸') ? '内贸' : '外贸'); }
   function modeBadge(r) { const label = modeLabel(r); const cls = label === '内外贸' ? 'mode-both' : label === '内贸' ? 'mode-domestic' : 'mode-foreign'; return '<span class="badge ' + cls + '">' + esc(label) + '</span>'; }
@@ -42,9 +46,21 @@
     const angle = ((h >>> 0) % 360) * Math.PI / 180, dist = (((h >>> 9) % 1000) / 1000) * 0.022;
     return { lat: +(lat + Math.sin(angle) * dist).toFixed(6), lng: +(lng + Math.cos(angle) * dist).toFixed(6) };
   }
+  async function geocodeCityCenter(city) {
+    if (!city || BASE_CITY_NAMES.has(city)) return null;
+    try {
+      const query = /[市盟州]$/.test(city) ? city : city + '市';
+      const url = 'https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates?f=json&countryCode=CHN&maxLocations=1&singleLine=' + encodeURIComponent(query + ', 中国');
+      const resp = await fetch(url, { cache: 'no-store' });
+      const data = await resp.json();
+      const c = data?.candidates?.[0];
+      if (c?.location && c.score >= 70) return { lat: +Number(c.location.y).toFixed(6), lng: +Number(c.location.x).toFixed(6) };
+    } catch (_) {}
+    return null;
+  }
   function nextCompanyId() { return Math.max(0, ...COMPANIES.map(x => Number(x.id) || 0)) + 1; }
-  function persistLocalCache() { try { localStorage.setItem(LOCAL_EDITS_KEY, JSON.stringify(pendingEdits)); localStorage.setItem(LOCAL_IMPORTS_KEY, JSON.stringify(localImports)); localStorage.setItem(LOCAL_UPDATED_KEY, new Date().toISOString()); updateCacheUi(); return true; } catch (err) { console.error('local cache failed', err); if (els.editNotice) setEditNotice('浏览器缓存空间不足，请先导出完整数据并清理本机修改。', 'err'); return false; } }
-  function updateCacheUi() { if (!els.cacheEditCount) return; const count = Object.keys(pendingEdits).length; els.cacheEditCount.textContent = countLabel(count); els.cacheImportCount.textContent = countLabel(localImports.length); let stamp = ''; try { stamp = localStorage.getItem(LOCAL_UPDATED_KEY) || ''; } catch (_) {} els.cacheUpdatedAt.textContent = stamp ? new Date(stamp).toLocaleString('zh-CN', { hour12: false }) : '—'; if (els.cachePill) els.cachePill.textContent = count || localImports.length ? '本机缓存 ' + (count + localImports.length) + ' 项' : '本机缓存已启用'; }
+  function persistLocalCache() { try { localStorage.setItem(LOCAL_EDITS_KEY, JSON.stringify(pendingEdits)); localStorage.setItem(LOCAL_IMPORTS_KEY, JSON.stringify(localImports)); localStorage.setItem(LOCAL_UPDATED_KEY, new Date().toISOString()); localStorage.setItem(LOCAL_DELETIONS_KEY, JSON.stringify([...localDeletions])); updateCacheUi(); return true; } catch (err) { console.error('local cache failed', err); if (els.editNotice) setEditNotice('浏览器缓存空间不足，请先导出完整数据并清理本机修改。', 'err'); return false; } }
+  function updateCacheUi() { if (!els.cacheEditCount) return; const count = Object.keys(pendingEdits).length; els.cacheEditCount.textContent = countLabel(count); els.cacheImportCount.textContent = countLabel(localImports.length); if (els.cacheDeleteCount) els.cacheDeleteCount.textContent = countLabel(localDeletions.size); let stamp = ''; try { stamp = localStorage.getItem(LOCAL_UPDATED_KEY) || ''; } catch (_) {} els.cacheUpdatedAt.textContent = stamp ? new Date(stamp).toLocaleString('zh-CN', { hour12: false }) : '—'; if (els.cachePill) { const cacheTotal = count + localImports.length + localDeletions.size; els.cachePill.textContent = cacheTotal ? '本机缓存 ' + cacheTotal + ' 项' : '本机缓存已启用'; } }
   for (const company of COMPANIES) { const patch = pendingEdits[company.id]; if (patch?.payload) Object.assign(company, patch.payload); if (!Array.isArray(company.tradeModes) || !company.tradeModes.length) company.tradeModes = company.tradeMode ? [company.tradeMode] : ['外贸']; company.tradeModes = [...new Set(company.tradeModes.filter(Boolean))]; company.tradeModeLabel = modeLabel(company); }
   function esc(v) { return String(v ?? '').replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s])); }
   function isStaticHost() { return /(^|\.)github\.io$|(^|\.)gitee\.io$|(^|\.)pages\.dev$/i.test(location.hostname); }
@@ -83,7 +99,8 @@
 
   function populateCities() {
     for (const r of COMPANIES) ensureCityMeta(r.city, r.lat, r.lng);
-    const names = Object.keys(CITY_META).filter(c => state.region === '全部' || CITY_META[c].region === state.region);
+    const available = new Set([...BASE_CITY_NAMES, ...COMPANIES.map(r => r.city).filter(Boolean)]);
+    const names = [...available].filter(c => state.region === '全部' || (CITY_META[c]?.region || '其他') === state.region).sort((a,b) => a.localeCompare(b, 'zh-CN'));
     if (state.city !== '全部' && !names.includes(state.city)) state.city = '全部';
     els.city.innerHTML = '<option value="全部">全部城市</option>' + names.map(n => '<option value="' + esc(n) + '">' + esc(n) + '</option>').join('');
     els.city.value = state.city;
@@ -188,6 +205,37 @@
     });
   }
 
+  function renderDynamicCityCoverage() {
+    if (!map) return;
+    if (!dynamicCoverageLayer) dynamicCoverageLayer = L.layerGroup().addTo(map);
+    dynamicCoverageLayer.clearLayers();
+    const cities = [...new Set(COMPANIES.map(r => r.city).filter(Boolean))].filter(c => !cityBounds[c]);
+    for (const city of cities) {
+      const rows = COMPANIES.filter(r => r.city === city && Number.isFinite(Number(r.lat)) && Number.isFinite(Number(r.lng)));
+      if (rows.length) {
+        const lat = rows.reduce((a,b) => a + Number(b.lat), 0) / rows.length;
+        const lng = rows.reduce((a,b) => a + Number(b.lng), 0) / rows.length;
+        ensureCityMeta(city, lat, lng);
+        CITY_META[city].center = [lng, lat];
+      }
+      const center = CITY_META[city]?.center;
+      if (!center) continue;
+      const regionOk = state.region === '全部' || (CITY_META[city]?.region || '其他') === state.region;
+      const active = regionOk && (state.city === '全部' || state.city === city);
+      const circle = L.circle([Number(center[1]), Number(center[0])], {
+        radius: 45000,
+        color: state.city === city ? '#ea580c' : (active ? '#f59e0b' : '#94a3b8'),
+        weight: state.city === city ? 3 : (active ? 2 : 1),
+        opacity: active ? .95 : .35,
+        fillColor: active ? '#f59e0b' : '#cbd5e1',
+        fillOpacity: active ? .15 : .04,
+        dashArray: '7 6',
+        className: 'dynamic-city-coverage'
+      }).addTo(dynamicCoverageLayer);
+      circle.bindTooltip(city + ' · 新增城市覆盖', { permanent: active, direction: 'center', className: 'dynamic-city-tooltip', opacity: 1 });
+    }
+  }
+
   function popupCompanyList(data) {
     const counts = data.reduce((acc, r) => { acc[r.category] = (acc[r.category] || 0) + 1; return acc; }, {});
     const meta = Object.keys(counts).map(k => `${k} ${counts[k]}`).join(' · ');
@@ -215,6 +263,7 @@
     if (GEOJSON) {
       boundaryLayer = L.geoJSON(GEOJSON, { interactive: false, style: { color: '#6c90bd', weight: 1, opacity: .65, fillColor: '#3b82f6', fillOpacity: .025 } }).addTo(map);
     }
+    dynamicCoverageLayer = L.layerGroup().addTo(map);
     markerCluster = L.markerClusterGroup({
       showCoverageOnHover: false,
       zoomToBoundsOnClick: false,
@@ -282,6 +331,7 @@
   function renderMap(items) {
     initMap();
     if (!map || !markerCluster || !selectedLayer) return;
+    renderDynamicCityCoverage();
     markerCluster.clearLayers();
     clusterRegistry.clear();
     clusterSeq = 0;
@@ -402,7 +452,7 @@
       lat, lng, locationBasis: Number.isFinite(givenLat) && Number.isFinite(givenLng) ? '人工校准' : (district ? '区县近似' : '城市近似'), addressStatus: String(rowValue(row, ['地址校准状态','地址状态','addressStatus'])).trim() || '待校准', coordinateAccuracy: Number.isFinite(givenLat) && Number.isFinite(givenLng) ? '精确位置' : '行政区近似', coordinateSource: Number.isFinite(givenLat) && Number.isFinite(givenLng) ? '导入文件提供' : '按城市/区县近似落点', mapAddress: address, addressType: '导入地址', amapPoiId: '', geocodeMatch: '', geocodeConfidence: '', geocodeSourceUrl: '', geocodedAt: '', creditCode: '',
       tradeModes: modes, tradeModeLabel: modes.includes('内贸') && modes.includes('外贸') ? '内外贸' : (modes.includes('内贸') ? '内贸' : '外贸'), internalVisited: modes.includes('内贸'), internalVisitCount: visitCount, latestVisitDate: normalizeDateValue(rowValue(row, ['最近走访日期','走访时间','实地探点时间','latestVisitDate'])), latestVisitResult: String(rowValue(row, ['最近走访结果','走访结果','实地探点结果','visitResult'])).trim(), visitDates: [], visitAddress: address, internalBusiness: factoryInfo,
       logisticsMode: String(rowValue(row, ['物流模式','logisticsMode'])).trim(), containerTypes: String(rowValue(row, ['常用箱型','箱型','containerTypes'])).trim(), mainDestination: String(rowValue(row, ['主要发运流向','主发区域','mainDestination'])).trim(), shippingLines: String(rowValue(row, ['船公司','shippingLines'])).trim(), truckingCompanies: String(rowValue(row, ['车队','truckingCompanies'])).trim(), cargoType, capacity: String(rowValue(row, ['产能','capacity'])).trim(), visitResult: String(rowValue(row, ['走访结果','visitResult'])).trim(),
-      contactPerson: String(rowValue(row, ['联系人','contactPerson'])).trim(), contactPhone: String(rowValue(row, ['联系方式','联系电话','手机号','电话','contactPhone'])).trim(), gridNo: String(rowValue(row, ['网格号','gridNo'])).trim(), shippingCustomer: String(rowValue(row, ['发运客户','shippingCustomer'])).trim(), locationId: String(rowValue(row, ['LOCATION_ID','locationId'])).trim(), lastEditedAt: new Date().toISOString(), lastEditBy: '本机导入'
+      needsCityGeocode: !BASE_CITY_NAMES.has(String(rowValue(row, ['城市','所在城市','city'])).trim() || (inferCity(address, name) || '其他')) && !(Number.isFinite(givenLat) && Number.isFinite(givenLng)), contactPerson: String(rowValue(row, ['联系人','contactPerson'])).trim(), contactPhone: String(rowValue(row, ['联系方式','联系电话','手机号','电话','contactPhone'])).trim(), gridNo: String(rowValue(row, ['网格号','gridNo'])).trim(), shippingCustomer: String(rowValue(row, ['发运客户','shippingCustomer'])).trim(), locationId: String(rowValue(row, ['LOCATION_ID','locationId'])).trim(), lastEditedAt: new Date().toISOString(), lastEditBy: '本机导入'
     };
   }
   async function parseImportFile(file) {
@@ -425,16 +475,30 @@
     els.importStatus.textContent = file.name;
     els.confirmImportBtn.disabled = !records.length;
   }
-  function commitImport() {
+  async function commitImport() {
     if (!pendingImportRows.length) return;
     const existing = new Set(COMPANIES.map(recordSignature));
     let added = 0, skipped = 0;
+    const addedCities = new Set();
+    const recordsToAdd = [];
     for (const rec of pendingImportRows) {
       const sig = recordSignature(rec);
       if (existing.has(sig)) { skipped++; continue; }
-      rec.id = nextCompanyId(); existing.add(sig); localImports.push(rec); COMPANIES.push(rec); added++;
+      rec.id = nextCompanyId(); existing.add(sig); recordsToAdd.push(rec); addedCities.add(rec.city); added++;
     }
-    persistLocalCache(); refresh(); pendingImportRows = []; els.confirmImportBtn.disabled = true;
+    const geocodeCities = [...new Set(recordsToAdd.filter(r => r.needsCityGeocode).map(r => r.city))];
+    for (const city of geocodeCities) {
+      const center = await geocodeCityCenter(city);
+      if (!center) continue;
+      ensureCityMeta(city, center.lat, center.lng); CITY_META[city].center = [center.lng, center.lat];
+      for (const rec of recordsToAdd.filter(r => r.city === city && r.needsCityGeocode)) {
+        rec.lat = center.lat; rec.lng = center.lng; rec.coordinateSource = '新增城市中心自动定位'; rec.coordinateAccuracy = '行政区近似'; rec.locationBasis = '城市近似';
+      }
+    }
+    for (const rec of recordsToAdd) { localImports.push(rec); COMPANIES.push(rec); }
+    persistLocalCache(); pendingImportRows = []; els.confirmImportBtn.disabled = true;
+    if (addedCities.size === 1) { state.region = '全部'; state.city = [...addedCities][0]; state.page = 1; fitOnRender = true; }
+    populateCities(); updateCacheUi(); refresh();
     els.importPreview.innerHTML = '<div class="ok">已导入 ' + countLabel(added) + ' 条；跳过重复 ' + countLabel(skipped) + ' 条。数据已缓存到本机浏览器。</div>';
     els.importStatus.textContent = '';
   }
@@ -444,10 +508,10 @@
   }
   function clearLocalCache() {
     if (!confirm('确定清空当前浏览器中的全部修改和新增记录吗？建议先导出完整数据。')) return;
-    try { localStorage.removeItem(LOCAL_EDITS_KEY); localStorage.removeItem(LOCAL_IMPORTS_KEY); localStorage.removeItem(LOCAL_UPDATED_KEY); } catch (_) {}
+    try { localStorage.removeItem(LOCAL_EDITS_KEY); localStorage.removeItem(LOCAL_IMPORTS_KEY); localStorage.removeItem(LOCAL_UPDATED_KEY); localStorage.removeItem(LOCAL_DELETIONS_KEY); } catch (_) {}
     location.reload();
   }
-  function saveCurrentEdit() {
+  async function saveCurrentEdit() {
     if (!editingId || !editingOriginal) return;
     const payload = {};
     for (const [key, idName] of Object.entries(EDIT_FIELDS)) { const el = document.getElementById(idName); if (el) payload[key] = String(el.value ?? '').trim(); }
@@ -458,6 +522,10 @@
     payload.internalVisitCount = Math.max(0, Number(payload.visitCount) || (payload.internalVisited ? 1 : 0));
     payload.visitCount = payload.internalVisitCount;
     let lat = Number(payload.lat), lng = Number(payload.lng);
+    if ((!Number.isFinite(lat) || !Number.isFinite(lng)) && !BASE_CITY_NAMES.has(payload.city)) {
+      const center = await geocodeCityCenter(payload.city);
+      if (center) { lat = center.lat; lng = center.lng; payload.coordinateSource = payload.coordinateSource || '新增城市中心自动定位'; payload.coordinateAccuracy = '行政区近似'; payload.locationBasis = '城市近似'; }
+    }
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) { const c = approxCoordinate(payload.city || editingOriginal.city, payload.district, payload.name + payload.address); lat = c.lat; lng = c.lng; payload.coordinateSource = payload.coordinateSource || '按城市/区县近似落点'; payload.coordinateAccuracy = payload.coordinateAccuracy || '行政区近似'; payload.locationBasis = payload.district ? '区县近似' : '城市近似'; }
     else { payload.locationBasis = ['企业POI','地址/建筑POI','关联厂区POI'].includes(payload.coordinateAccuracy) ? 'POI校准' : '人工校准'; }
     payload.lat = +lat.toFixed(6); payload.lng = +lng.toFixed(6); payload.matchedDistrict = payload.district || '';
@@ -465,12 +533,37 @@
     payload.lastEditedAt = new Date().toISOString(); payload.lastEditBy = '网页编辑';
     const found = COMPANIES.find(x => Number(x.id) === Number(editingId));
     const importIndex = localImports.findIndex(x => Number(x.id) === Number(editingId));
+    const isNew = !found;
+    const cityChanged = !editingOriginal || payload.city !== editingOriginal.city;
     if (!found) { const rec = { ...editingOriginal, ...payload }; COMPANIES.push(rec); rec.id = editingId; localImports.push(rec); }
     else if (importIndex >= 0) { Object.assign(localImports[importIndex], payload); Object.assign(found, payload); delete pendingEdits[editingId]; }
     else { pendingEdits[editingId] = { payload, updatedAt: new Date().toISOString() }; Object.assign(found, payload); }
     ensureCityMeta(payload.city, payload.lat, payload.lng);
     if (!persistLocalCache()) return;
-    setEditNotice('已缓存到本机浏览器。', 'ok'); refresh(); setTimeout(closeEdit, 550);
+    if (isNew || cityChanged) {
+      state.region = '全部'; state.city = payload.city; state.selectedId = editingId; state.page = 1; fitOnRender = true;
+    }
+    populateCities(); updateCacheUi(); refresh();
+    setEditNotice('已缓存到本机浏览器。', 'ok'); setTimeout(closeEdit, 550);
+  }
+  function deleteCurrentCompany() {
+    const r = COMPANIES.find(x => Number(x.id) === Number(state.selectedId));
+    if (!r) return;
+    const importedIndex = localImports.findIndex(x => Number(x.id) === Number(r.id));
+    const localOnly = isStaticHost() || importedIndex < 0;
+    const tip = importedIndex >= 0 ? '确定删除这条本机新增记录吗？' : '确定删除这条企业记录吗？在线静态版的删除只会在当前浏览器生效，可通过导出完整数据提交公共更新。';
+    if (!confirm(tip + '\n\n企业：' + r.name)) return;
+    const idx = COMPANIES.findIndex(x => Number(x.id) === Number(r.id));
+    if (idx >= 0) COMPANIES.splice(idx, 1);
+    if (importedIndex >= 0) localImports.splice(importedIndex, 1);
+    else localDeletions.add(String(r.id));
+    delete pendingEdits[String(r.id)];
+    delete pendingEdits[r.id];
+    state.selectedId = null;
+    persistLocalCache();
+    populateCities();
+    updateCacheUi();
+    refresh();
   }
   function renderDetail(r) {
     if (!r) {
@@ -478,9 +571,11 @@
       els.detailTags.innerHTML = '';
       els.detailBody.innerHTML = '<div class="detail-empty">点击地图点位或下方名单中的企业，查看内贸走访、外贸线索、产品、来源和流向详情。</div>';
       els.editCompanyBtn.hidden = true;
+      if (els.deleteCompanyBtn) els.deleteCompanyBtn.hidden = true;
       return;
     }
     els.editCompanyBtn.hidden = false;
+    if (els.deleteCompanyBtn) els.deleteCompanyBtn.hidden = false;
     els.detailTitle.textContent = r.name;
     els.detailTags.innerHTML = modeBadge(r) + ' <span class="badge">' + esc(r.category) + '</span> <span class="badge ' + (r.priority === '高' ? 'high' : r.priority === '低' ? 'low' : '') + '">' + esc(r.priority || '中') + '优先级</span> <span class="badge">' + esc(r.status) + '</span> <span class="badge ' + (r.confidence === 'C' ? 'low' : '') + '">可信度 ' + esc(r.confidence) + '</span>';
     const website = validUrl(r.website) ? '<a href="' + esc(r.website) + '" target="_blank" rel="noopener">' + esc(r.website) + '</a>' : esc(r.website || '未公开');
@@ -497,6 +592,8 @@
     els.detailBody.innerHTML = '<section class="detail-section"><h3>基本信息</h3><dl class="kv">' + detailRow('城市', r.city) + detailRow('统一社会信用代码', r.creditCode) + detailHtmlRow('信用代码来源', creditSource) + detailRow('区县/园区', r.district) + detailRow('业务模式', modeLabel(r)) + detailRow('细分类型', r.customerType) + detailRow('主营产品/服务', r.product) + detailRow('外贸线索', r.exportClue) + detailRow('位置精度', precision) + detailRow('地址校准', r.addressStatus) + detailRow('坐标精度', r.coordinateAccuracy) + detailRow('坐标来源', r.coordinateSource) + detailRow('POI匹配', r.geocodeMatch) + detailRow('POI编号', r.amapPoiId) + detailRow('POI核验时间', r.geocodedAt) + '</dl></section>' + visitBlock + '<section class="detail-section"><h3>联系与地址</h3><dl class="kv">' + detailHtmlRow('官网', website) + detailRow('公开电话', r.phone) + detailRow('地址', r.address) + detailRow('地图定位地址', r.mapAddress) + detailHtmlRow('地图核实', locationLinks) + '</dl></section><section class="detail-section"><h3>来源与核验</h3><dl class="kv">' + detailRow('来源', r.sourceName) + detailRow('来源等级', r.sourceGrade) + detailRow('核验状态', r.status) + detailRow('可信度', r.confidence) + detailRow('最近编辑', r.lastEditedAt) + detailHtmlRow('来源链接', source) + '</dl></section><section class="detail-section"><h3>发运流向</h3>' + flowBlock + '</section><section class="detail-section"><h3>备注与数据限制</h3><div class="section-text">' + esc(r.note || '无补充备注') + '</div></section>';
   }
   function refresh() {
+    els.cityCountPill.textContent = new Set(COMPANIES.map(r => r.city).filter(Boolean)).size + ' 城市';
+    els.recordCountPill.textContent = countLabel(COMPANIES.length) + ' 条记录';
     currentItems = computeItems();
     renderKPIs(currentItems);
     renderList(currentItems);
@@ -567,6 +664,7 @@
   els.baseSwitch.addEventListener('click', e => { const b = e.target.closest('[data-basemap]'); if (b) setBaseLayer(b.dataset.basemap); });
   els.fitMapBtn.addEventListener('click', () => { fitOnRender = true; refresh(); });
   els.editCompanyBtn.addEventListener('click', () => { if (state.selectedId) openEdit(state.selectedId); });
+  els.deleteCompanyBtn?.addEventListener('click', deleteCurrentCompany);
   els.saveEditBtn.addEventListener('click', saveCurrentEdit);
   els.cancelEditBtn.addEventListener('click', closeEdit);
   els.closeEditBtn.addEventListener('click', closeEdit);
