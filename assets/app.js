@@ -687,5 +687,6 @@
   initHeadline();
   regionButtonSync();
   populateCities();
+  updateCacheUi();
   refresh();
 })();

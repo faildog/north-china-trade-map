@@ -9,10 +9,10 @@
   (async () => {
     try {
       let b64 = '';
-      for (let i = 1; i <= 3; i++) b64 += await get('./remote_data_' + i + '.txt?v=20261119b');
+      for (let i = 1; i <= 3; i++) b64 += await get('./remote_data_' + i + '.txt?v=20261119c');
       (0, eval)(await unzip(b64));
       const s = document.createElement('script');
-      s.src = './assets/app.js?v=20261119b';
+      s.src = './assets/app.js?v=20261119c';
       s.onerror = () => document.documentElement.dataset.mapError = 'app.js load failed';
       document.body.appendChild(s);
     } catch (e) {
@@ -21,3 +21,4 @@
     }
   })();
 })();
+
