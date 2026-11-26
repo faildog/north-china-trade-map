@@ -230,14 +230,17 @@
     .mode-row .region-btn[data-mode="内贸"] { border-color:#c9f0e2; background:#f1fcf8; color:#087b58; }
     .mode-row .region-btn[data-mode="外贸"] { border-color:#cfe0ff; background:#f2f6ff; color:#1d4ed8; }
     .mode-row .region-btn[data-mode="内外贸"] { border-color:#fde7bb; background:#fffaf0; color:#9a5b00; }
+    .mode-row .region-btn[data-mode="待核实"] { border-color:#dbe2ea; background:#f8fafc; color:#64748b; }
     .mode-row .region-btn.active[data-mode="全部"] { background:var(--ink); }
     .mode-row .region-btn.active[data-mode="内贸"] { background:#087b58; border-color:#087b58; color:#fff; }
     .mode-row .region-btn.active[data-mode="外贸"] { background:#1d4ed8; border-color:#1d4ed8; color:#fff; }
     .mode-row .region-btn.active[data-mode="内外贸"] { background:#b45309; border-color:#b45309; color:#fff; }
+    .mode-row .region-btn.active[data-mode="待核实"] { background:#64748b; border-color:#64748b; color:#fff; }
     .filter-grid { grid-template-columns: 1fr 1.2fr 1fr .9fr .9fr .9fr auto auto; }
     .badge.mode-domestic { background:#e9fbf4; color:#087b58; border-color:#c9f0e2; }
     .badge.mode-foreign { background:#edf4ff; color:#1d4ed8; border-color:#d7e5ff; }
     .badge.mode-both { background:#fff6e5; color:#9a5b00; border-color:#fde7bb; }
+    .badge.mode-unknown { background:#f4f6f8; color:#64748b; border-color:#e2e8f0; }
     .cache-pill.ok { background:#e9fbf4; color:#087b58; border-color:#c9f0e2; }
     .data-dialog { width:min(940px,calc(100vw - 28px)); }
     .data-dialog .edit-dialog-body { grid-template-columns: 1.15fr .85fr; max-height:calc(100vh - 180px); }
@@ -266,7 +269,7 @@
       <div>
         <div class="eyebrow">NORTH CHINA CUSTOMER INTELLIGENCE</div>
         <h1>华北客户地图 · 内贸 / 外贸</h1>
-        <p class="lead">把外贸客户线索与内贸走访工厂放在同一张地图上。可按业务模式、区域、城市和企业类型联动筛选；内贸记录由 2026-11-11 走访表归并，重复走访合并为一家企业并保留走访次数。</p>
+        <p class="lead">把外贸客户线索、内贸走访工厂与天津港货源地点放在同一张地图上。可按业务模式、区域、城市和企业类型联动筛选；2026-11-26 已合入天津港货源地图 2026-10 的 1,231 个有效坐标地点，业务模式未确认的数据单独标为“待核实”。</p>
       </div>
       <div class="hero-actions">
         <span class="pill" id="cityCountPill">0 城市</span>
@@ -302,6 +305,7 @@
         <button class="region-btn" type="button" data-mode="内贸">内贸走访</button>
         <button class="region-btn" type="button" data-mode="外贸">外贸线索</button>
         <button class="region-btn" type="button" data-mode="内外贸">内外贸兼有</button>
+        <button class="region-btn" type="button" data-mode="待核实">业务待核实</button>
       </div>
       <div class="filter-grid">
         <div class="field"><label for="cityFilter">城市</label><select class="select" id="cityFilter"></select></div>
@@ -384,7 +388,7 @@
       <input type="hidden" id="editCompanyId">
       <div><label for="editName">企业名称</label><input id="editName" type="text"></div>
       <div><label for="editCategory">客户分类</label><select id="editCategory"><option>工厂/制造</option><option>外贸公司</option><option>货代/物流</option><option>外贸服务/平台</option></select></div>
-      <div><label for="editTradeMode">业务模式</label><select id="editTradeMode"><option>外贸</option><option>内贸</option><option>内外贸</option></select></div>
+      <div><label for="editTradeMode">业务模式</label><select id="editTradeMode"><option>外贸</option><option>内贸</option><option>内外贸</option><option>待核实</option></select></div>
       <div><label for="editVisitCount">走访次数</label><input id="editVisitCount" type="number" min="0" step="1"></div>
       <div><label for="editLatestVisitDate">最近走访日期</label><input id="editLatestVisitDate" type="date"></div>
       <div><label for="editVisitResult">最近走访结果</label><input id="editVisitResult" type="text" placeholder="装 / 卸 / 装卸 / 异常 / 准确"></div>
@@ -465,7 +469,6 @@
   <script src="assets/leaflet.js?v=20261111a"></script>
   <script src="assets/leaflet.markercluster.js?v=20261111a"></script>
   <script src="assets/north-china-map.js?v=20261111a"></script>
-  <script src="start.js?v=20261119c"></script>
+  <script src="start.js?v=20261126a"></script>
 </body>
 </html>
-

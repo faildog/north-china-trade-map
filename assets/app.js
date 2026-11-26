@@ -30,9 +30,9 @@
   let editingId = null, editingOriginal = null, pickingLocation = false, pendingImportRows = [];
   const nf = new Intl.NumberFormat('zh-CN');
   let currentItems = [], cityBounds = {}, map = null, markerCluster = null, selectedLayer = null, boundaryLayer = null, dynamicCoverageLayer = null, tileLayer = null, clusterRegistry = new Map(), clusterSeq = 0, fitOnRender = false, activeBase = 'street';
-  function tradeModesOf(r) { const modes = Array.isArray(r?.tradeModes) ? r.tradeModes.filter(Boolean) : []; return modes.length ? [...new Set(modes)] : [r?.tradeMode || '外贸']; }
-  function modeLabel(r) { const modes = tradeModesOf(r); return modes.includes('内贸') && modes.includes('外贸') ? '内外贸' : (modes.includes('内贸') ? '内贸' : '外贸'); }
-  function modeBadge(r) { const label = modeLabel(r); const cls = label === '内外贸' ? 'mode-both' : label === '内贸' ? 'mode-domestic' : 'mode-foreign'; return '<span class="badge ' + cls + '">' + esc(label) + '</span>'; }
+  function tradeModesOf(r) { const modes = Array.isArray(r?.tradeModes) ? r.tradeModes.filter(Boolean) : []; return modes.length ? [...new Set(modes)] : [r?.tradeMode || r?.tradeModeLabel || '待核实']; }
+  function modeLabel(r) { const modes = tradeModesOf(r); if (modes.length === 1 && modes[0] === '待核实') return '待核实'; return modes.includes('内贸') && modes.includes('外贸') ? '内外贸' : (modes.includes('内贸') ? '内贸' : '外贸'); }
+  function modeBadge(r) { const label = modeLabel(r); const cls = label === '内外贸' ? 'mode-both' : label === '内贸' ? 'mode-domestic' : label === '待核实' ? 'mode-unknown' : 'mode-foreign'; return '<span class="badge ' + cls + '">' + esc(label) + '</span>'; }
   function matchesMode(r, mode) { if (mode === '全部') return true; const modes = tradeModesOf(r); if (mode === '内外贸') return modes.includes('内贸') && modes.includes('外贸'); return modes.includes(mode); }
   function ensureCityMeta(city, lat, lng) { if (!city || CITY_META[city]) return; CITY_META[city] = { region: '其他', center: [Number(lng) || 116.4, Number(lat) || 39.8] }; }
   function approxCoordinate(city, district, seed) {
@@ -61,7 +61,7 @@
   function nextCompanyId() { return Math.max(0, ...COMPANIES.map(x => Number(x.id) || 0)) + 1; }
   function persistLocalCache() { try { localStorage.setItem(LOCAL_EDITS_KEY, JSON.stringify(pendingEdits)); localStorage.setItem(LOCAL_IMPORTS_KEY, JSON.stringify(localImports)); localStorage.setItem(LOCAL_UPDATED_KEY, new Date().toISOString()); localStorage.setItem(LOCAL_DELETIONS_KEY, JSON.stringify([...localDeletions])); updateCacheUi(); return true; } catch (err) { console.error('local cache failed', err); if (els.editNotice) setEditNotice('浏览器缓存空间不足，请先导出完整数据并清理本机修改。', 'err'); return false; } }
   function updateCacheUi() { if (!els.cacheEditCount) return; const count = Object.keys(pendingEdits).length; els.cacheEditCount.textContent = countLabel(count); els.cacheImportCount.textContent = countLabel(localImports.length); if (els.cacheDeleteCount) els.cacheDeleteCount.textContent = countLabel(localDeletions.size); let stamp = ''; try { stamp = localStorage.getItem(LOCAL_UPDATED_KEY) || ''; } catch (_) {} els.cacheUpdatedAt.textContent = stamp ? new Date(stamp).toLocaleString('zh-CN', { hour12: false }) : '—'; if (els.cachePill) { const cacheTotal = count + localImports.length + localDeletions.size; els.cachePill.textContent = cacheTotal ? '本机缓存 ' + cacheTotal + ' 项' : '本机缓存已启用'; } }
-  for (const company of COMPANIES) { const patch = pendingEdits[company.id]; if (patch?.payload) Object.assign(company, patch.payload); if (!Array.isArray(company.tradeModes) || !company.tradeModes.length) company.tradeModes = company.tradeMode ? [company.tradeMode] : ['外贸']; company.tradeModes = [...new Set(company.tradeModes.filter(Boolean))]; company.tradeModeLabel = modeLabel(company); }
+  for (const company of COMPANIES) { const patch = pendingEdits[company.id]; if (patch?.payload) Object.assign(company, patch.payload); if (!Array.isArray(company.tradeModes) || !company.tradeModes.length) company.tradeModes = company.tradeMode ? [company.tradeMode] : (company.tradeModeLabel ? [company.tradeModeLabel] : ['待核实']); company.tradeModes = [...new Set(company.tradeModes.filter(Boolean))]; company.tradeModeLabel = modeLabel(company); }
   function esc(v) { return String(v ?? '').replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s])); }
   function isStaticHost() { return /(^|\.)github\.io$|(^|\.)gitee\.io$|(^|\.)pages\.dev$/i.test(location.hostname); }
   function validUrl(v) { return /^https?:\/\//i.test(String(v || '')); }
@@ -116,7 +116,7 @@
     if (state.addressStatus !== '全部' && r.addressStatus !== state.addressStatus) return false;
     if (state.flowOnly && !r.flow) return false;
     if (state.q) {
-      const hay = [r.name,r.city,r.district,r.address,r.mapAddress,r.product,r.exportClue,r.flow,r.note,r.customerType,r.tradeModeLabel,r.cargoType,r.logisticsMode,r.mainDestination,r.shippingLines,r.truckingCompanies,r.factoryInfo,r.visitResult].join(' ').toLowerCase();
+      const hay = [r.name,r.city,r.district,r.address,r.mapAddress,r.product,r.exportClue,r.flow,r.note,r.customerType,r.tradeModeLabel,r.sourceRecordId,r.cargoType,r.logisticsMode,r.mainDestination,r.shippingLines,r.truckingCompanies,r.factoryInfo,r.visitResult].join(' ').toLowerCase();
       if (!hay.includes(state.q.trim().toLowerCase())) return false;
     }
     return true;
@@ -374,7 +374,7 @@
   }
   function openNew() {
     const city = state.city !== '全部' ? state.city : '';
-    const defaultMode = state.tradeMode === '外贸' ? '外贸' : '内贸';
+    const defaultMode = ['外贸','内贸','待核实'].includes(state.tradeMode) ? state.tradeMode : '内贸';
     const rec = { id: nextCompanyId(), name:'', category:'工厂/制造', tradeMode:defaultMode, city, district:'', address:'', phone:'', website:'', product:'', exportClue:'', status:'部分核验', confidence:'B', priority:'中', addressStatus:'待校准', coordinateAccuracy:'行政区近似', coordinateSource:'', lat:'', lng:'', mapAddress:'', amapPoiId:'', geocodeMatch:'', geocodeSourceUrl:'', sourceName:'本机新增', sourceUrl:'', flow:'', flowEvidence:'', flowSourceName:'', flowSourceUrl:'', note:'', visitCount:defaultMode === '内贸' ? 1 : 0, latestVisitDate:new Date().toISOString().slice(0,10), visitResult:'', logisticsMode:'', containerTypes:'', mainDestination:'', shippingLines:'', truckingCompanies:'', cargoType:'', capacity:'', factoryInfo:'' };
     editingId = rec.id; editingOriginal = rec; fillEditForm(rec, true);
   }
@@ -415,7 +415,7 @@
     const s = String(v || '').trim(); const m = s.match(/^(\d{4})[-\/.年](\d{1,2})[-\/.月](\d{1,2})/); return m ? m[1] + '-' + m[2].padStart(2,'0') + '-' + m[3].padStart(2,'0') : s.slice(0, 10);
   }
   function rowValue(row, aliases) { for (const a of aliases) { const key = normalizeHeader(a); if (row[key] !== undefined && row[key] !== null && String(row[key]).trim() !== '') return row[key]; } return ''; }
-  function parseModes(v) { const s = String(v || '').trim(); if (s.includes('内外') || (s.includes('内贸') && s.includes('外贸'))) return ['内贸','外贸']; if (s.includes('内贸')) return ['内贸']; return ['外贸']; }
+  function parseModes(v) { const s = String(v || '').trim(); if (/待核实|待定|未知/.test(s)) return ['待核实']; if (s.includes('内外') || (s.includes('内贸') && s.includes('外贸'))) return ['内贸','外贸']; if (s.includes('内贸')) return ['内贸']; return ['外贸']; }
   function inferCategory(name, text) { const blob = String(name || '') + ' ' + String(text || ''); if (/物流|仓储|仓库|堆场|货运|运输|港|货代|车队|供应链/.test(blob)) return '货代/物流'; if (/贸易|进出口|商贸/.test(blob)) return '外贸公司'; if (/市场|平台|园区|基地|中心/.test(blob)) return '外贸服务/平台'; return '工厂/制造'; }
   function inferCity(address, name) {
     const text = String(address || '') + ' ' + String(name || '');
@@ -450,7 +450,7 @@
       sourceName, sourceUrl: String(rowValue(row, ['来源URL','来源链接','sourceUrl'])).trim(), sourceGrade: '本机导入', status: String(rowValue(row, ['核验状态','status'])).trim() || '部分核验', confidence: String(rowValue(row, ['可信度','confidence'])).trim() || 'B', priority: String(rowValue(row, ['客户优先级','优先级','priority'])).trim() || '中',
       flow: String(rowValue(row, ['公开发运流向','主要发运流向','主要流向','flow'])).trim(), flowEvidence: factoryInfo, flowSourceName: sourceName, flowSourceUrl: '', flowConfidence: 'B', note,
       lat, lng, locationBasis: Number.isFinite(givenLat) && Number.isFinite(givenLng) ? '人工校准' : (district ? '区县近似' : '城市近似'), addressStatus: String(rowValue(row, ['地址校准状态','地址状态','addressStatus'])).trim() || '待校准', coordinateAccuracy: Number.isFinite(givenLat) && Number.isFinite(givenLng) ? '精确位置' : '行政区近似', coordinateSource: Number.isFinite(givenLat) && Number.isFinite(givenLng) ? '导入文件提供' : '按城市/区县近似落点', mapAddress: address, addressType: '导入地址', amapPoiId: '', geocodeMatch: '', geocodeConfidence: '', geocodeSourceUrl: '', geocodedAt: '', creditCode: '',
-      tradeModes: modes, tradeModeLabel: modes.includes('内贸') && modes.includes('外贸') ? '内外贸' : (modes.includes('内贸') ? '内贸' : '外贸'), internalVisited: modes.includes('内贸'), internalVisitCount: visitCount, latestVisitDate: normalizeDateValue(rowValue(row, ['最近走访日期','走访时间','实地探点时间','latestVisitDate'])), latestVisitResult: String(rowValue(row, ['最近走访结果','走访结果','实地探点结果','visitResult'])).trim(), visitDates: [], visitAddress: address, internalBusiness: factoryInfo,
+      tradeModes: modes, tradeModeLabel: modes.includes('待核实') ? '待核实' : modes.includes('内贸') && modes.includes('外贸') ? '内外贸' : (modes.includes('内贸') ? '内贸' : '外贸'), internalVisited: modes.includes('内贸'), internalVisitCount: visitCount, latestVisitDate: normalizeDateValue(rowValue(row, ['最近走访日期','走访时间','实地探点时间','latestVisitDate'])), latestVisitResult: String(rowValue(row, ['最近走访结果','走访结果','实地探点结果','visitResult'])).trim(), visitDates: [], visitAddress: address, internalBusiness: factoryInfo,
       logisticsMode: String(rowValue(row, ['物流模式','logisticsMode'])).trim(), containerTypes: String(rowValue(row, ['常用箱型','箱型','containerTypes'])).trim(), mainDestination: String(rowValue(row, ['主要发运流向','主发区域','mainDestination'])).trim(), shippingLines: String(rowValue(row, ['船公司','shippingLines'])).trim(), truckingCompanies: String(rowValue(row, ['车队','truckingCompanies'])).trim(), cargoType, capacity: String(rowValue(row, ['产能','capacity'])).trim(), visitResult: String(rowValue(row, ['走访结果','visitResult'])).trim(),
       needsCityGeocode: !BASE_CITY_NAMES.has(String(rowValue(row, ['城市','所在城市','city'])).trim() || (inferCity(address, name) || '其他')) && !(Number.isFinite(givenLat) && Number.isFinite(givenLng)), contactPerson: String(rowValue(row, ['联系人','contactPerson'])).trim(), contactPhone: String(rowValue(row, ['联系方式','联系电话','手机号','电话','contactPhone'])).trim(), gridNo: String(rowValue(row, ['网格号','gridNo'])).trim(), shippingCustomer: String(rowValue(row, ['发运客户','shippingCustomer'])).trim(), locationId: String(rowValue(row, ['LOCATION_ID','locationId'])).trim(), lastEditedAt: new Date().toISOString(), lastEditBy: '本机导入'
     };
@@ -516,7 +516,7 @@
     const payload = {};
     for (const [key, idName] of Object.entries(EDIT_FIELDS)) { const el = document.getElementById(idName); if (el) payload[key] = String(el.value ?? '').trim(); }
     if (!payload.name) { setEditNotice('企业名称不能为空。', 'err'); return; }
-    payload.tradeModes = payload.tradeMode === '内外贸' ? ['内贸','外贸'] : [payload.tradeMode === '内贸' ? '内贸' : '外贸'];
+    payload.tradeModes = payload.tradeMode === '内外贸' ? ['内贸','外贸'] : [payload.tradeMode || '待核实'];
     payload.tradeModeLabel = payload.tradeMode;
     payload.internalVisited = payload.tradeModes.includes('内贸');
     payload.internalVisitCount = Math.max(0, Number(payload.visitCount) || (payload.internalVisited ? 1 : 0));
